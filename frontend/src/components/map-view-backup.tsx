@@ -1,7 +1,17 @@
-import React, { useMemo } from "react";
+import React, { useState, useMemo } from "react";
 // @ts-ignore - Ignoring type issues with Google Maps components
-import { GoogleMap, useLoadScript, Marker } from "@react-google-maps/api";
+import {
+  GoogleMap,
+  useLoadScript,
+  Marker,
+  InfoWindow,
+} from "@react-google-maps/api";
 
+interface ItineraryLocation {
+  id: number;
+  name: string;
+  position: google.maps.LatLngLiteral;
+}
 interface MapViewProps {
   highlightedPlace?: string;
 }
@@ -105,21 +115,30 @@ const itineraryLocations = [
 // declare module '@react-google-maps/api';
 
 export const MapView: React.FC<MapViewProps> = ({ highlightedPlace }) => {
-  // Google Maps options
-  const mapOptions = useMemo(
+  const [mapRef, setMapRef] = useState<google.maps.Map | null>(null);
+  const [selectedLoc, setSelectedLoc] = useState<ItineraryLocation | null>(
+    null
+  );
+  const [placeDetails, setPlaceDetails] =
+    useState<google.maps.places.PlaceResult | null>(null);
+
+  // Load Google Maps + Places library
+  const { isLoaded, loadError } = useLoadScript({
+    googleMapsApiKey: "AIzaSyCO7OMyTxvd0--cyNO4muoy7_jpcOEPsEU",
+    libraries: ["places"],
+  });
+
+  if (loadError) return <div>Error loading map</div>;
+  if (!isLoaded) return <div>Loading map...</div>;
+
+  // Map style options
+  const mapOptions = useMemo<google.maps.MapOptions>(
     () => ({
       disableDefaultUI: false,
       clickableIcons: true,
       scrollwheel: true,
       styles: [
-        {
-          // 全局去色处理
-          stylers: [
-            { saturation: -100 }, // 去除饱和度
-            { lightness: 0 }, // 保持亮度不变
-          ],
-        },
-
+        { stylers: [{ saturation: -100 }, { lightness: 0 }] },
         {
           featureType: "water",
           elementType: "geometry.fill",
@@ -139,53 +158,83 @@ export const MapView: React.FC<MapViewProps> = ({ highlightedPlace }) => {
     }),
     []
   );
-  // Google Maps API key is already set: AIzaSyCO7OMyTxvd0--cyNO4muoy7_jpcOEPsEU
-  // Google Maps implementation is already set up
-  const { isLoaded, loadError } = useLoadScript({
-    googleMapsApiKey: "AIzaSyCO7OMyTxvd0--cyNO4muoy7_jpcOEPsEU",
-  });
 
-  // Loading and error handling is already implemented
-  if (loadError || !isLoaded) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-100 rounded-lg">
-        <div className="text-center">
-          <div className="text-lg font-georgia text-gray-600">
-            {loadError ? "Error loading Google Maps" : "Loading map..."}
-          </div>
-        </div>
-      </div>
+  // Map load handler
+  const onMapLoad = (map: google.maps.Map) => {
+    setMapRef(map);
+  };
+
+  // Handle marker click: fetch Google Places details
+  const handleMarkerClick = (loc: ItineraryLocation) => {
+    setSelectedLoc(loc);
+    setPlaceDetails(null);
+    if (!mapRef) return;
+    const service = new window.google.maps.places.PlacesService(mapRef);
+    // First find place by query
+    service.findPlaceFromQuery(
+      {
+        query: loc.name,
+        fields: ["place_id"],
+        locationBias: loc.position,
+      },
+      (results, status) => {
+        if (
+          status === window.google.maps.places.PlacesServiceStatus.OK &&
+          results &&
+          results.length
+        ) {
+          const placeId = results[0].place_id!;
+          // Then get full details
+          service.getDetails(
+            {
+              placeId,
+              fields: [
+                "name",
+                "formatted_address",
+                "rating",
+                "opening_hours",
+                "formatted_phone_number",
+              ],
+            },
+            (detail, stat) => {
+              if (
+                stat === window.google.maps.places.PlacesServiceStatus.OK &&
+                detail
+              ) {
+                setPlaceDetails(detail);
+              }
+            }
+          );
+        }
+      }
     );
-  }
+  };
 
-  // Find the highlighted location to center on it if present
-  const highlightedLocation = itineraryLocations.find(
-    (loc) => loc.name === highlightedPlace
-  );
+  // Determine center & zoom
+  const center =
+    itineraryLocations.find((loc) => loc.name === highlightedPlace)?.position ||
+    losAngelesCoordinates;
+  const zoom = highlightedPlace || selectedLoc ? 15 : 12;
 
-  // Set the center coordinates based on highlighted place or default to LA
-  const centerCoordinates = highlightedLocation
-    ? highlightedLocation.position
-    : losAngelesCoordinates;
-
-  // We have to ignore type errors for now but the map will work correctly at runtime
   return (
     <div className="w-full h-full relative overflow-hidden rounded-lg">
       {/* @ts-ignore */}
       <GoogleMap
         mapContainerStyle={{ width: "100%", height: "100%" }}
-        center={centerCoordinates}
-        zoom={highlightedPlace ? 15 : 12}
+        center={center}
+        zoom={zoom}
         options={mapOptions}
+        onLoad={onMapLoad}
       >
         {itineraryLocations.map((loc) => (
           <Marker
             key={loc.id}
             position={loc.position}
             title={loc.name}
+            onClick={() => handleMarkerClick(loc)}
             // @ts-ignore
             icon={
-              loc.name === highlightedPlace
+              loc.name === (highlightedPlace || selectedLoc?.name)
                 ? {
                     path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z",
                     fillColor: "#ef4444",
@@ -197,33 +246,34 @@ export const MapView: React.FC<MapViewProps> = ({ highlightedPlace }) => {
                   }
                 : undefined
             }
-            animation={loc.name === highlightedPlace ? 1 : undefined} // 1 = BOUNCE
           />
         ))}
+        {/* Google InfoWindow with real Google details */}
+        {selectedLoc && placeDetails && (
+          <InfoWindow
+            position={selectedLoc.position}
+            onCloseClick={() => setSelectedLoc(null)}
+          >
+            <div className="max-w-xs">
+              <h3 className="font-georgia font-semibold mb-1">
+                {placeDetails.name}
+              </h3>
+              <p className="text-sm">{placeDetails.formatted_address}</p>
+              {placeDetails.rating && <p>Rating: {placeDetails.rating}</p>}
+              {placeDetails.formatted_phone_number && (
+                <p>Phone: {placeDetails.formatted_phone_number}</p>
+              )}
+              {placeDetails.opening_hours?.weekday_text && (
+                <ul className="text-xs mt-2 space-y-1">
+                  {placeDetails.opening_hours.weekday_text.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </InfoWindow>
+        )}
       </GoogleMap>
-
-      {/* Info Card for highlighted place */}
-      {highlightedPlace && (
-        <div className="absolute top-5 right-5 bg-white p-4 border border-gray-200 rounded-lg shadow-lg max-w-xs">
-          <h3 className="font-georgia font-medium mb-2">{highlightedPlace}</h3>
-          <p className="text-sm text-gray-600">
-            Explore this location on your Los Angeles movie-themed trip.
-          </p>
-        </div>
-      )}
-
-      {/* Legend overlay */}
-      <div className="absolute bottom-5 left-5 bg-white p-3 border border-gray-300 rounded-lg shadow-md">
-        <div className="font-medium mb-2 text-sm">Trip Legend</div>
-        <div className="flex items-center gap-2 mb-1">
-          <div className="w-4 h-4 rounded-full bg-gray-500"></div>
-          <span className="text-sm">Locations</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded-full bg-red-500"></div>
-          <span className="text-sm">Highlighted Spot</span>
-        </div>
-      </div>
     </div>
   );
 };

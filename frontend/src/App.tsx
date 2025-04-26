@@ -1,12 +1,17 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from "react";
 import Sidebar from "./components/sidebar";
-import { MapView } from "./components/map-view";
+import { MapView } from "./components/map-view-backup";
 import { ChatHeader } from "./components/chat-header";
-import Itinerary from "./components/itinerary";
+// import Itinerary from "./components/itinerary";
+import Itinerary, {
+  placeholderItinerary,
+  ItineraryDay,
+} from "./components/itinerary";
 import Select, { SingleValue } from "react-select";
-import { FiShare2 } from "react-icons/fi";
-import { FaSignInAlt } from "react-icons/fa";
+import { FiShare2, FiCalendar } from "react-icons/fi";
+import { createEvents, EventAttributes } from "ics";
+// import { FaSignInAlt } from "react-icons/fa";
 import WelcomePage from "./components/WelcomePage";
 import ShareModal from "./components/ShareModal";
 
@@ -85,10 +90,12 @@ export default function App() {
   const [mapPanelWidth, setMapPanelWidth] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
   const [showWelcome, setShowWelcome] = useState(() => {
-    const savedState = localStorage.getItem('showWelcome');
+    const savedState = localStorage.getItem("showWelcome");
     return savedState ? JSON.parse(savedState) : true;
   });
-  const [highlightedPlace, setHighlightedPlace] = useState<string | undefined>(undefined);
+  const [highlightedPlace, setHighlightedPlace] = useState<string | undefined>(
+    undefined
+  );
   const [shareModalOpen, setShareModalOpen] = useState(false);
 
   const sidebarDraggingRef = useRef(false);
@@ -168,7 +175,7 @@ export default function App() {
 
   // Save welcome state to localStorage when it changes
   useEffect(() => {
-    localStorage.setItem('showWelcome', JSON.stringify(showWelcome));
+    localStorage.setItem("showWelcome", JSON.stringify(showWelcome));
   }, [showWelcome]);
 
   // Handler for "New Chat" button in sidebar
@@ -180,15 +187,89 @@ export default function App() {
   const handleShareClick = () => {
     setShareModalOpen(true);
   };
+  type ItineraryDay = (typeof placeholderItinerary)[number];
+  const handleExportCalendar = () => {
+    const tripStartDate = new Date();
+
+    // 创建 ICS 事件数组
+    const events: EventAttributes[] = placeholderItinerary.flatMap(
+      (day: ItineraryDay, idx: number) => {
+        const dayDate = new Date(tripStartDate);
+        dayDate.setDate(tripStartDate.getDate() + idx);
+
+        // 返回固定 5 元组 [year, month, day, hour, minute]
+        const toYMDHM = (
+          timeStr: string
+        ): [number, number, number, number, number] => {
+          const [hm, suffix] = timeStr.split(" ");
+          let [h, m] = hm.split(":").map(Number);
+          if (suffix === "PM" && h < 12) h += 12;
+          if (suffix === "AM" && h === 12) h = 0;
+          return [
+            dayDate.getFullYear(),
+            dayDate.getMonth() + 1,
+            dayDate.getDate(),
+            h,
+            m,
+          ];
+        };
+
+        // "吃饭" 事件
+        const foodStart = toYMDHM(day.food.time);
+        const foodEvent: EventAttributes = {
+          title: `🍴 ${day.food.place}`,
+          start: foodStart,
+          duration: { hours: 1 },
+          description: `Cost: ${day.food.cost}`,
+          location: day.food.place,
+        };
+
+        // 景点活动事件
+        const activityEvents = day.activities.map((act) => {
+          // 提取前两部分生成 start 元组
+          const timePart = `${act.time.split(" ")[0]} ${
+            act.time.split(" ")[1]
+          }`;
+          const [year, month, date, startH, startM] = toYMDHM(timePart);
+          const hoursMatch = act.time.match(/\((\d+)h\)/);
+          const durHours = hoursMatch ? Number(hoursMatch[1]) : 1;
+          return {
+            title: `🎬 ${act.place}`,
+            start: [year, month, date, startH, startM],
+            duration: { hours: durHours },
+            description: `Cost: ${act.cost}`,
+            location: act.place,
+          } as EventAttributes;
+        });
+
+        return [foodEvent, ...activityEvents];
+      }
+    );
+
+    // 生成 .ics 并触发下载
+    createEvents(events, (error, value) => {
+      if (error) {
+        console.error(error);
+        return;
+      }
+      const blob = new Blob([value!], { type: "text/calendar;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "trip-itinerary.ics";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  };
 
   return (
     <div className="flex h-screen relative">
       {/* Sidebar - Always visible regardless of welcome page */}
       {!collapsed && (
-        <Sidebar 
-          width={sidebarWidth} 
+        <Sidebar
+          width={sidebarWidth}
           onToggle={() => setCollapsed(true)}
-          onNewChat={handleNewChat} 
+          onNewChat={handleNewChat}
         />
       )}
       {collapsed && (
@@ -208,9 +289,9 @@ export default function App() {
       )}
 
       {/* Share Modal */}
-      <ShareModal 
-        isOpen={shareModalOpen} 
-        onClose={() => setShareModalOpen(false)} 
+      <ShareModal
+        isOpen={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
       />
 
       {/* Main Content - Either welcome page or main app */}
@@ -227,7 +308,7 @@ export default function App() {
             {/* Top Buttons with Divider */}
             <div className="flex flex-col">
               <div className="flex justify-end p-3 gap-2">
-                <button 
+                <button
                   onClick={handleShareClick}
                   className="font-georgia px-4 py-2 border border-gray-300 rounded-full flex items-center gap-2 text-gray-500 hover:bg-gray-100 transition"
                 >
@@ -236,15 +317,18 @@ export default function App() {
                   <span>Share</span>
                 </button>
 
-                <button className="font-georgia px-4 py-2 border border-gray-300 rounded-full flex items-center gap-2 text-gray-500 hover:bg-gray-100 transition">
+                <button
+                  onClick={handleExportCalendar}
+                  className="font-georgia px-4 py-2 border border-gray-300 rounded-full flex items-center gap-2 text-gray-500 hover:bg-gray-100 transition"
+                >
                   {/* @ts-ignore */}
-                  <FaSignInAlt size={16} />
-                  <span>Sign In</span>
+                  <FiCalendar size={16} />
+                  <span>Add to Calendar</span>
                 </button>
               </div>
               <div className="border-b border-gray-200 mx-4 mb-1"></div>
             </div>
-            
+
             {/* Content */}
             <div className="flex-1 p-4 flex gap-4">
               {/* Left Panel */}
@@ -318,7 +402,9 @@ export default function App() {
                       </span>
                       <Select<OptionType, false>
                         options={mbtiOptions}
-                        value={mbtiOptions.find((o) => o.value === mbti) || null}
+                        value={
+                          mbtiOptions.find((o) => o.value === mbti) || null
+                        }
                         onChange={handleMbtiChange}
                         isSearchable={false}
                         menuPlacement="auto" // try "top" if you always want it above
@@ -339,7 +425,9 @@ export default function App() {
                           option: (base, state) => ({
                             ...base,
                             color: "black", // dropdown items = black
-                            backgroundColor: state.isFocused ? "#f3f4f6" : "white",
+                            backgroundColor: state.isFocused
+                              ? "#f3f4f6"
+                              : "white",
                             cursor: "pointer",
                             fontSize: "0.65rem",
                           }),
@@ -389,7 +477,9 @@ export default function App() {
                           option: (base, state) => ({
                             ...base,
                             color: "black",
-                            backgroundColor: state.isFocused ? "#f3f4f6" : "white",
+                            backgroundColor: state.isFocused
+                              ? "#f3f4f6"
+                              : "white",
                             cursor: "pointer",
                             fontSize: "0.65rem",
                           }),

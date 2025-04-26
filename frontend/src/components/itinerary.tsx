@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 
 // 6-day placeholder itinerary for a Los Angeles movie-themed trip
-const placeholderItinerary = [
+export const placeholderItinerary = [
   {
     day: "Day 1",
     food: { time: "12:00 PM", place: "Grand Central Market", cost: "$25" },
@@ -82,7 +82,10 @@ const placeholderItinerary = [
     summary:
       "End with a gourmet food hall meal and an immersive peek behind your favorite films, capped by local art browsing.",
   },
-];
+] as const;
+
+// 导出 ItineraryDay 类型，方便其他组件使用
+export type ItineraryDay = (typeof placeholderItinerary)[number];
 
 interface ItineraryProps {
   onPlaceHover: (place: string | undefined) => void;
@@ -91,13 +94,13 @@ interface ItineraryProps {
 export default function Itinerary({ onPlaceHover }: ItineraryProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const day = placeholderItinerary[currentIndex];
-  
+
   // Track mouse movement for swiping
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
   const [offsetX, setOffsetX] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [direction, setDirection] = useState<'none' | 'left' | 'right'>('none');
+  const [direction, setDirection] = useState<"none" | "left" | "right">("none");
   const [touchStartX, setTouchStartX] = useState(0);
   const [activePlace, setActivePlace] = useState<string | undefined>(undefined);
 
@@ -124,14 +127,14 @@ export default function Itinerary({ onPlaceHover }: ItineraryProps) {
   const moveToPrev = () => {
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1);
-      setDirection('right');
+      setDirection("right");
     }
   };
 
   const moveToNext = () => {
     if (currentIndex < placeholderItinerary.length - 1) {
       setCurrentIndex(currentIndex + 1);
-      setDirection('left');
+      setDirection("left");
     }
   };
 
@@ -140,34 +143,34 @@ export default function Itinerary({ onPlaceHover }: ItineraryProps) {
     setIsDragging(true);
     setStartX(e.clientX);
     setOffsetX(0);
-    setDirection('none');
+    setDirection("none");
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDragging) return;
-    
+
     const currentX = e.clientX;
     const diff = currentX - startX;
     setOffsetX(diff);
-    
+
     if (diff > 50) {
-      setDirection('right');
+      setDirection("right");
     } else if (diff < -50) {
-      setDirection('left');
+      setDirection("left");
     } else {
-      setDirection('none');
+      setDirection("none");
     }
   };
 
   const handleMouseUp = () => {
     if (!isDragging) return;
-    
-    if (direction === 'left') {
+
+    if (direction === "left") {
       moveToNext();
-    } else if (direction === 'right') {
+    } else if (direction === "right") {
       moveToPrev();
     }
-    
+
     setIsDragging(false);
     setOffsetX(0);
   };
@@ -175,26 +178,26 @@ export default function Itinerary({ onPlaceHover }: ItineraryProps) {
   // Touch events for mobile swipe
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchStartX(e.touches[0].clientX);
-    setDirection('none');
+    setDirection("none");
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     const touchCurrentX = e.touches[0].clientX;
     const diff = touchCurrentX - touchStartX;
-    
+
     if (diff > 50) {
-      setDirection('right');
+      setDirection("right");
     } else if (diff < -50) {
-      setDirection('left');
+      setDirection("left");
     } else {
-      setDirection('none');
+      setDirection("none");
     }
   };
 
   const handleTouchEnd = () => {
-    if (direction === 'left') {
+    if (direction === "left") {
       moveToNext();
-    } else if (direction === 'right') {
+    } else if (direction === "right") {
       moveToPrev();
     }
   };
@@ -202,20 +205,20 @@ export default function Itinerary({ onPlaceHover }: ItineraryProps) {
   // Reset animation classes
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDirection('none');
+      setDirection("none");
     }, 300);
     return () => clearTimeout(timer);
   }, [currentIndex]);
 
   // Get animation class
   const getAnimationClass = () => {
-    if (direction === 'left') return 'animate-slide-left';
-    if (direction === 'right') return 'animate-slide-right';
-    return '';
+    if (direction === "left") return "animate-slide-left";
+    if (direction === "right") return "animate-slide-right";
+    return "";
   };
 
   return (
-    <div 
+    <div
       className="panel rounded-custom flex-1 overflow-hidden p-4"
       ref={containerRef}
       onMouseDown={handleMouseDown}
@@ -225,7 +228,7 @@ export default function Itinerary({ onPlaceHover }: ItineraryProps) {
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+      style={{ cursor: isDragging ? "grabbing" : "grab" }}
     >
       {/* Header */}
       <h2 className="text-center font-georgia font-medium text-lg mb-1">
@@ -242,22 +245,28 @@ export default function Itinerary({ onPlaceHover }: ItineraryProps) {
       </div>
 
       {/* Sections */}
-      <div className={`space-y-4 transition-transform duration-300 ${getAnimationClass()}`}>
+      <div
+        className={`space-y-4 transition-transform duration-300 ${getAnimationClass()}`}
+      >
         {/* Food */}
         <div className="border border-gray-200 p-4 rounded-lg font-georgia">
           <div className="font-medium text-lg mb-2">Food</div>
           <div className="flex items-center">
             <div className="w-24 text-sm text-gray-500">{day.food.time}</div>
-            <div 
+            <div
               className={`flex-1 text-sm font-medium cursor-pointer transition-colors ${
-                activePlace === day.food.place ? 'text-red-500' : 'text-gray-900 hover:text-red-500'
+                activePlace === day.food.place
+                  ? "text-red-500"
+                  : "text-gray-900 hover:text-red-500"
               }`}
               onMouseEnter={() => handlePlaceHover(day.food.place)}
               onMouseLeave={handlePlaceLeave}
             >
               {day.food.place}
             </div>
-            <div className="w-5 text-sm text-right text-gray-400">{day.food.cost}</div>
+            <div className="w-5 text-sm text-right text-gray-400">
+              {day.food.cost}
+            </div>
           </div>
         </div>
 
@@ -268,16 +277,20 @@ export default function Itinerary({ onPlaceHover }: ItineraryProps) {
             {day.activities.map((act) => (
               <div key={act.place} className="flex items-center">
                 <div className="w-24 text-sm text-gray-500">{act.time}</div>
-                <div 
+                <div
                   className={`flex-1 text-sm font-medium cursor-pointer transition-colors ${
-                    activePlace === act.place ? 'text-red-500' : 'text-gray-900 hover:text-red-500'
+                    activePlace === act.place
+                      ? "text-red-500"
+                      : "text-gray-900 hover:text-red-500"
                   }`}
                   onMouseEnter={() => handlePlaceHover(act.place)}
                   onMouseLeave={handlePlaceLeave}
                 >
                   {act.place}
                 </div>
-                <div className="w-5 text-sm text-right text-gray-400">{act.cost}</div>
+                <div className="w-5 text-sm text-right text-gray-400">
+                  {act.cost}
+                </div>
               </div>
             ))}
           </div>
@@ -285,15 +298,21 @@ export default function Itinerary({ onPlaceHover }: ItineraryProps) {
 
         {/* Summary */}
         <div className="border border-gray-200 p-4 rounded-lg font-georgia ">
-          <div className="font-medium text-lg mb-2 text-red-800">Summary of the Day</div>
+          <div className="font-medium text-lg mb-2 text-red-800">
+            Summary of the Day
+          </div>
           <p className="text-sm italic text-gray-700">"{day.summary}"</p>
         </div>
       </div>
 
       {/* Pagination with left/right indicators */}
       <div className="flex justify-center items-center mt-6 select-none">
-        <div 
-          className={`mr-4 ${currentIndex === 0 ? 'text-gray-300' : 'text-gray-600 cursor-pointer'}`}
+        <div
+          className={`mr-4 ${
+            currentIndex === 0
+              ? "text-gray-300"
+              : "text-gray-600 cursor-pointer"
+          }`}
           onClick={currentIndex > 0 ? moveToPrev : undefined}
         >
           ←
@@ -307,9 +326,17 @@ export default function Itinerary({ onPlaceHover }: ItineraryProps) {
             onClick={() => setCurrentIndex(idx)}
           />
         ))}
-        <div 
-          className={`ml-4 ${currentIndex === placeholderItinerary.length - 1 ? 'text-gray-300' : 'text-gray-600 cursor-pointer'}`}
-          onClick={currentIndex < placeholderItinerary.length - 1 ? moveToNext : undefined}
+        <div
+          className={`ml-4 ${
+            currentIndex === placeholderItinerary.length - 1
+              ? "text-gray-300"
+              : "text-gray-600 cursor-pointer"
+          }`}
+          onClick={
+            currentIndex < placeholderItinerary.length - 1
+              ? moveToNext
+              : undefined
+          }
         >
           →
         </div>
