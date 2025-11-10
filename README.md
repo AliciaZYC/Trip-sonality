@@ -21,7 +21,7 @@ Trip-sonality is a unique travel planning platform that goes beyond generic itin
 
 ### Prerequisites
 
-- Node.js (v16+)
+- Next.js (v16+)
 - Python (v3.8+)
 - MongoDB
 - Google Places API Key
